@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:window_manager/window_manager.dart';
 import '../models/clipboard_item.dart';
 import '../services/clipboard_service.dart';
 import '../services/storage_service.dart';
+import '../services/permission_service.dart';
 import '../widgets/clipboard_item_widget.dart';
 import '../widgets/permission_banner.dart';
 
@@ -22,16 +24,23 @@ class ClipboardPanel extends StatefulWidget {
   State<ClipboardPanel> createState() => _ClipboardPanelState();
 }
 
-class _ClipboardPanelState extends State<ClipboardPanel> {
+class _ClipboardPanelState extends State<ClipboardPanel>
+    with WindowListener, WidgetsBindingObserver {
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
+  final PermissionService _permissionService = PermissionService();
   List<ClipboardItem> _items = [];
   String _searchQuery = '';
+  bool _hasPermission = false; // Start false to force check
+  Timer? _permissionCheckTimer;
 
   @override
   void initState() {
     super.initState();
+    windowManager.addListener(this);
+    WidgetsBinding.instance.addObserver(this);
     _loadItems();
+    _checkPermission();
 
     // Listen for new clipboard items
     widget.clipboardService.onNewItem.listen((_) {
@@ -42,6 +51,35 @@ class _ClipboardPanelState extends State<ClipboardPanel> {
     widget.storageService.changes.listen((_) {
       _loadItems();
     });
+
+    // Periodically check permission while window is open
+    _permissionCheckTimer = Timer.periodic(const Duration(seconds: 2), (_) {
+      _checkPermission();
+    });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      debugPrint('App resumed, checking permission...');
+      _checkPermission();
+    }
+  }
+
+  Future<void> _checkPermission() async {
+    final hasPermission = await _permissionService
+        .checkAccessibilityPermission();
+    debugPrint('Permission check result: $hasPermission');
+    if (mounted && hasPermission != _hasPermission) {
+      setState(() {
+        _hasPermission = hasPermission;
+      });
+    }
+  }
+
+  @override
+  void onWindowFocus() {
+    _checkPermission();
   }
 
   void _loadItems() {
@@ -130,6 +168,9 @@ class _ClipboardPanelState extends State<ClipboardPanel> {
 
   @override
   void dispose() {
+    windowManager.removeListener(this);
+    WidgetsBinding.instance.removeObserver(this);
+    _permissionCheckTimer?.cancel();
     _searchController.dispose();
     _searchFocusNode.dispose();
     super.dispose();
@@ -248,7 +289,7 @@ class _ClipboardPanelState extends State<ClipboardPanel> {
               ),
 
               // Permission banner
-              const PermissionBanner(hasPermission: false),
+              PermissionBanner(hasPermission: _hasPermission),
 
               // Content
               Expanded(

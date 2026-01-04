@@ -1,6 +1,9 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:window_manager/window_manager.dart';
+import 'package:launch_at_startup/launch_at_startup.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'screens/clipboard_panel.dart';
 import 'services/clipboard_service.dart';
 import 'services/hotkey_service.dart';
@@ -14,7 +17,29 @@ void main() async {
 
   // Initialize window manager
   await windowManager.ensureInitialized();
-  debugPrint('✓ Window manager initialized');
+
+  // Enable launch at startup safely
+  try {
+    final packageInfo = await PackageInfo.fromPlatform();
+
+    // Get the .app bundle path from the executable path
+    // executable: /path/to/App.app/Contents/MacOS/App
+    // desired: /path/to/App.app
+    String appPath = Platform.resolvedExecutable;
+    if (appPath.contains('.app/Contents/MacOS')) {
+      appPath = appPath.substring(0, appPath.indexOf('.app') + 4);
+    }
+
+    LaunchAtStartup.instance.setup(
+      appName: packageInfo.appName,
+      appPath: appPath,
+    );
+
+    await LaunchAtStartup.instance.enable();
+    debugPrint('✓ Launch at startup enabled');
+  } catch (e) {
+    debugPrint('⚠️ Failed to enable launch at startup: $e');
+  }
 
   // Configure window options
   const windowOptions = WindowOptions(
@@ -31,9 +56,7 @@ void main() async {
     await windowManager.setAsFrameless();
     await windowManager.setHasShadow(true);
     await windowManager.setBackgroundColor(Colors.transparent);
-    await windowManager.show();
-    await windowManager.focus();
-    debugPrint('✓ Window shown and focused');
+    // Don't show here - wait for UI to be ready
   });
 
   // Initialize services
@@ -83,9 +106,14 @@ class _ClipboardManagerAppState extends State<ClipboardManagerApp>
     windowManager.addListener(this);
     debugPrint('App state initialized');
 
-    // Delay hotkey registration to after first frame
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    // Delay hotkey registration and window showing to after first frame
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       _registerHotkey();
+
+      // Show window only after UI is ready to avoid black screen
+      debugPrint('UI ready, showing window...');
+      await windowManager.show();
+      await windowManager.focus();
     });
   }
 

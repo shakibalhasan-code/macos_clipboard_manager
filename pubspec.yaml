@@ -41,6 +41,8 @@ dependencies:
   hive_flutter: ^1.1.0          # Hive Flutter integration
   uuid: ^4.5.1                  # Unique IDs for items
   window_manager: ^0.4.0        # Window management
+  launch_at_startup: ^0.5.1     # Auto-start on login
+  package_info_plus: ^5.0.1     # App info
   pasteboard: ^0.2.0            # Enhanced clipboard access
   path_provider: ^2.1.5         # Storage paths
   intl: ^0.19.0                 # Date formatting
