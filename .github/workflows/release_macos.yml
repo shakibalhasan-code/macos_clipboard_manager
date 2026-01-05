@@ -1,0 +1,40 @@
+name: Release macOS App
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    runs-on: macos-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build macOS Release
+        run: flutter build macos --release
+
+      - name: Compress App
+        run: |
+          cd build/macos/Build/Products/Release
+          tar -czf "MacClipboard.tar.gz" "Clipboard Manager.app"
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: build/macos/Build/Products/Release/MacClipboard.tar.gz
+          draft: false
+          prerelease: false
+          generate_release_notes: true
