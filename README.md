@@ -1,6 +1,6 @@
 # MacClip - The Modern macOS Clipboard Manager
 
-[![Platform](https://img.shields.io/badge/Platform-macOS-black?style=flat-square&logo=apple)](https://apple.com/macos)
+[![Platform](https://img.shields.io/badge/Platform-macOS-black?style=flat-square&logo=apple)]([https://apple.com/macos](https://github.com/shakibalhasan-code/macos_clipboard_manager/releases))
 [![Built With](https://img.shields.io/badge/Built%20With-Flutter-blue?style=flat-square&logo=flutter)](https://flutter.dev)
 [![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
 
