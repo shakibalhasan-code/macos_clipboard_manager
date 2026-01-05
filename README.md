@@ -23,10 +23,14 @@
 
 1. Go to the [Releases](https://github.com/shakibalhasan-code/macos_clipboard_manager/releases) page.
 2. Download the latest `MacClipboard.tar.gz`.
-3. Extract the archive.
-4. Drag `Clipboard Manager.app` to your Applications folder.
-5. Open the app. 
-   > **Note**: You may need to allow the app in **System Settings > Privacy & Security** since it is not notarized yet.
+3. Extract the archive (double-click it).
+4. Drag `Clipboard Manager.app` to your **Applications** folder.
+5. **Important**: Since this app is not signed by Apple yet, you may see a warning.
+   - **Right-click** (or Control-click) the app and select **Open**.
+   - Click **Open** in the dialog box.
+   - *Alternatively*: Go to **System Settings > Privacy & Security** and scroll down to click **Open Anyway**.
+6. Grant **Accessibility Permissions** when prompted.
+   - This is required for the global hotkey (`⌘ + Shift + V`) to work even when the app is in the background.
 
 ## Usage settings
 
