@@ -1,8 +1,9 @@
 # MacClip - The Modern macOS Clipboard Manager
 
-[![Platform](https://img.shields.io/badge/Platform-macOS-black?style=flat-square&logo=apple)]([https://apple.com/macos](https://github.com/shakibalhasan-code/macos_clipboard_manager/releases))
+[![Platform](https://img.shields.io/badge/Platform-macOS-black?style=flat-square&logo=apple)](https://github.com/shakibalhasan-code/macos_clipboard_manager/releases)
 [![Built With](https://img.shields.io/badge/Built%20With-Flutter-blue?style=flat-square&logo=flutter)](https://flutter.dev)
 [![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
+[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-yellow.svg?style=flat-square&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/shakibalhasancode)
 
 **MacClip** is a lightweight, blazing-fast, and beautiful clipboard manager for macOS, designed to boost your productivity. It runs silently in the background, remembering everything you copy so you never lose a link, text snippet, or image again.
 

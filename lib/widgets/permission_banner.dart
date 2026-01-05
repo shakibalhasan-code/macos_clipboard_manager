@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'dart:io';
+import '../services/permission_service.dart';
 
 /// Widget to show permission status and request button
 class PermissionBanner extends StatelessWidget {
@@ -8,14 +8,7 @@ class PermissionBanner extends StatelessWidget {
   const PermissionBanner({super.key, required this.hasPermission});
 
   Future<void> _openAccessibilitySettings() async {
-    // Use shell command to open System Preferences
-    try {
-      await Process.run('open', [
-        'x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility',
-      ]);
-    } catch (e) {
-      debugPrint('Failed to open System Preferences: $e');
-    }
+    await PermissionService().openAccessibilitySettings();
   }
 
   @override

@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/services.dart';
 
 /// Service to manage macOS accessibility permissions
@@ -20,6 +21,13 @@ class PermissionService {
 
   /// Open System Preferences to Accessibility settings
   Future<void> openAccessibilitySettings() async {
-    // This is handled by the permission banner widget using Process.run
+    try {
+      await Process.run('open', [
+        'x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility',
+      ]);
+    } catch (e) {
+      // Just log internally or rethrow if needed
+      // debugPrint('Failed to open settings: $e');
+    }
   }
 }

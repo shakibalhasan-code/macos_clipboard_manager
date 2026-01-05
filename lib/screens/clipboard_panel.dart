@@ -1,191 +1,23 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:get/get.dart';
 import 'package:window_manager/window_manager.dart';
+import '../controllers/clipboard_controller.dart';
 import '../models/clipboard_item.dart';
-import '../services/clipboard_service.dart';
-import '../services/storage_service.dart';
-import '../services/permission_service.dart';
 import '../widgets/clipboard_item_widget.dart';
 import '../widgets/permission_banner.dart';
 
-/// Main clipboard panel screen
-class ClipboardPanel extends StatefulWidget {
-  final StorageService storageService;
-  final ClipboardService clipboardService;
-
-  const ClipboardPanel({
-    super.key,
-    required this.storageService,
-    required this.clipboardService,
-  });
-
-  @override
-  State<ClipboardPanel> createState() => _ClipboardPanelState();
-}
-
-class _ClipboardPanelState extends State<ClipboardPanel>
-    with WindowListener, WidgetsBindingObserver {
-  final TextEditingController _searchController = TextEditingController();
-  final FocusNode _searchFocusNode = FocusNode();
-  final PermissionService _permissionService = PermissionService();
-  List<ClipboardItem> _items = [];
-  String _searchQuery = '';
-  bool _hasPermission = false; // Start false to force check
-  Timer? _permissionCheckTimer;
-
-  @override
-  void initState() {
-    super.initState();
-    windowManager.addListener(this);
-    WidgetsBinding.instance.addObserver(this);
-    _loadItems();
-    _checkPermission();
-
-    // Listen for new clipboard items
-    widget.clipboardService.onNewItem.listen((_) {
-      _loadItems();
-    });
-
-    // Listen for storage changes
-    widget.storageService.changes.listen((_) {
-      _loadItems();
-    });
-
-    // Periodically check permission while window is open
-    _permissionCheckTimer = Timer.periodic(const Duration(seconds: 2), (_) {
-      _checkPermission();
-    });
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      debugPrint('App resumed, checking permission...');
-      _checkPermission();
-    }
-  }
-
-  Future<void> _checkPermission() async {
-    final hasPermission = await _permissionService
-        .checkAccessibilityPermission();
-    debugPrint('Permission check result: $hasPermission');
-    if (mounted && hasPermission != _hasPermission) {
-      setState(() {
-        _hasPermission = hasPermission;
-      });
-    }
-  }
-
-  @override
-  void onWindowFocus() {
-    _checkPermission();
-  }
-
-  void _loadItems() {
-    setState(() {
-      if (_searchQuery.isEmpty) {
-        _items = widget.storageService.getAll();
-      } else {
-        _items = widget.storageService.search(_searchQuery);
-      }
-    });
-  }
-
-  void _onSearch(String query) {
-    setState(() {
-      _searchQuery = query;
-      _loadItems();
-    });
-  }
-
-  Future<void> _onItemTap(ClipboardItem item) async {
-    try {
-      // Copy to clipboard
-      await widget.clipboardService.copyToClipboard(item);
-
-      // Show feedback without hiding window
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              item.type == ClipboardType.text
-                  ? 'Copied to clipboard'
-                  : 'Image copied',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-            duration: const Duration(milliseconds: 800),
-            behavior: SnackBarBehavior.floating,
-            width: 200,
-          ),
-        );
-      }
-    } catch (e) {
-      debugPrint('Error copying item: $e');
-    }
-  }
-
-  Future<void> _onItemDelete(ClipboardItem item) async {
-    await widget.storageService.remove(item.id);
-    _loadItems();
-  }
-
-  Future<void> _onItemPin(ClipboardItem item) async {
-    await widget.storageService.togglePin(item.id);
-    _loadItems();
-  }
-
-  Future<void> _clearHistory() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Clear History'),
-        content: const Text(
-          'Remove all unpinned items from clipboard history?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(
-              foregroundColor: Theme.of(context).colorScheme.error,
-            ),
-            child: const Text('Clear'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed == true) {
-      await widget.storageService.clearHistory();
-      _loadItems();
-    }
-  }
-
-  @override
-  void dispose() {
-    windowManager.removeListener(this);
-    WidgetsBinding.instance.removeObserver(this);
-    _permissionCheckTimer?.cancel();
-    _searchController.dispose();
-    _searchFocusNode.dispose();
-    super.dispose();
-  }
+class ClipboardPanel extends GetView<ClipboardController> {
+  const ClipboardPanel({super.key});
 
   @override
   Widget build(BuildContext context) {
+    // Controller is already injected
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final pinnedItems = _items.where((i) => i.isPinned).toList();
-    final unpinnedItems = _items.where((i) => !i.isPinned).toList();
 
     return KeyboardListener(
       focusNode: FocusNode(),
       onKeyEvent: (event) {
-        // Hide on Escape key
         if (event is KeyDownEvent &&
             event.logicalKey == LogicalKeyboardKey.escape) {
           windowManager.hide();
@@ -215,217 +47,218 @@ class _ClipboardPanelState extends State<ClipboardPanel>
           child: Column(
             children: [
               // Header with search
-              Container(
-                padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
-                decoration: BoxDecoration(
-                  border: Border(
-                    bottom: BorderSide(
-                      color: isDark
-                          ? Colors.white.withOpacity(0.1)
-                          : Colors.black.withOpacity(0.1),
-                    ),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    // Search field
-                    Expanded(
-                      child: TextField(
-                        controller: _searchController,
-                        focusNode: _searchFocusNode,
-                        onChanged: _onSearch,
-                        decoration: InputDecoration(
-                          hintText: 'Search clipboard history...',
-                          prefixIcon: Icon(
-                            Icons.search,
-                            size: 20,
-                            color: isDark ? Colors.white38 : Colors.black38,
-                          ),
-                          suffixIcon: _searchQuery.isNotEmpty
-                              ? IconButton(
-                                  onPressed: () {
-                                    _searchController.clear();
-                                    _onSearch('');
-                                  },
-                                  icon: const Icon(Icons.close, size: 18),
-                                )
-                              : null,
-                          isDense: true,
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 10,
-                          ),
-                        ),
-                        style: const TextStyle(fontSize: 14),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
+              _buildHeader(context, isDark),
 
-                    // Clear history button
-                    IconButton(
-                      onPressed: _items.isEmpty ? null : _clearHistory,
-                      icon: const Icon(Icons.delete_sweep_outlined),
-                      tooltip: 'Clear history',
-                      style: IconButton.styleFrom(
-                        foregroundColor: isDark
-                            ? Colors.white54
-                            : Colors.black45,
-                      ),
-                    ),
-
-                    // Settings/close button
-                    IconButton(
-                      onPressed: () => windowManager.hide(),
-                      icon: const Icon(Icons.close),
-                      tooltip: 'Close (Esc)',
-                      style: IconButton.styleFrom(
-                        foregroundColor: isDark
-                            ? Colors.white54
-                            : Colors.black45,
-                      ),
-                    ),
-                  ],
+              // Permission banner (Reactive)
+              Obx(
+                () => PermissionBanner(
+                  hasPermission: controller.hasPermission.value,
                 ),
               ),
 
-              // Permission banner
-              PermissionBanner(hasPermission: _hasPermission),
-
-              // Content
+              // Content (Reactive List)
               Expanded(
-                child: _items.isEmpty
-                    ? _buildEmptyState(isDark)
-                    : ListView(
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                        children: [
-                          // Pinned section
-                          if (pinnedItems.isNotEmpty) ...[
-                            Padding(
-                              padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    Icons.push_pin,
-                                    size: 14,
-                                    color: Theme.of(
-                                      context,
-                                    ).colorScheme.primary,
-                                  ),
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    'Pinned',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w600,
-                                      color: Theme.of(
-                                        context,
-                                      ).colorScheme.primary,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            ...pinnedItems.map(
-                              (item) => ClipboardItemWidget(
-                                item: item,
-                                onTap: () => _onItemTap(item),
-                                onDelete: () => _onItemDelete(item),
-                                onPin: () => _onItemPin(item),
-                              ),
-                            ),
-                            if (unpinnedItems.isNotEmpty)
-                              Divider(
-                                height: 24,
-                                indent: 16,
-                                endIndent: 16,
-                                color: isDark
-                                    ? Colors.white.withOpacity(0.1)
-                                    : Colors.black.withOpacity(0.1),
-                              ),
-                          ],
+                child: Obx(() {
+                  final items = controller.items;
+                  if (items.isEmpty) {
+                    return _buildEmptyState(isDark);
+                  }
 
-                          // Recent section
-                          if (unpinnedItems.isNotEmpty) ...[
-                            if (pinnedItems.isNotEmpty)
-                              Padding(
-                                padding: const EdgeInsets.fromLTRB(
-                                  16,
-                                  0,
-                                  16,
-                                  4,
-                                ),
-                                child: Text(
-                                  'Recent',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                    color: isDark
-                                        ? Colors.white54
-                                        : Colors.black45,
-                                  ),
-                                ),
-                              ),
-                            ...unpinnedItems.map(
-                              (item) => ClipboardItemWidget(
-                                item: item,
-                                onTap: () => _onItemTap(item),
-                                onDelete: () => _onItemDelete(item),
-                                onPin: () => _onItemPin(item),
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
+                  final pinnedItems = items.where((i) => i.isPinned).toList();
+                  final unpinnedItems = items
+                      .where((i) => !i.isPinned)
+                      .toList();
+
+                  return ListView(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    children: [
+                      // Pinned section
+                      if (pinnedItems.isNotEmpty) ...[
+                        _buildSectionHeader(context, 'Pinned', Icons.push_pin),
+                        ...pinnedItems.map((item) => _buildItem(item)),
+                        if (unpinnedItems.isNotEmpty)
+                          Divider(
+                            height: 24,
+                            indent: 16,
+                            endIndent: 16,
+                            color: isDark
+                                ? Colors.white.withOpacity(0.1)
+                                : Colors.black.withOpacity(0.1),
+                          ),
+                      ],
+
+                      // Recent section
+                      if (unpinnedItems.isNotEmpty) ...[
+                        if (pinnedItems.isNotEmpty)
+                          _buildSectionHeader(context, 'Recent', null, isDark),
+                        ...unpinnedItems.map((item) => _buildItem(item)),
+                      ],
+                    ],
+                  );
+                }),
               ),
 
               // Footer
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 8,
+              _buildFooter(context, isDark),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeader(BuildContext context, bool isDark) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
+      decoration: BoxDecoration(
+        border: Border(
+          bottom: BorderSide(
+            color: isDark
+                ? Colors.white.withOpacity(0.1)
+                : Colors.black.withOpacity(0.1),
+          ),
+        ),
+      ),
+      child: Row(
+        children: [
+          // Search field
+          Expanded(
+            child: TextField(
+              onChanged: controller.onSearch,
+              decoration: InputDecoration(
+                hintText: 'Search clipboard history...',
+                prefixIcon: Icon(
+                  Icons.search,
+                  size: 20,
+                  color: isDark ? Colors.white38 : Colors.black38,
                 ),
-                decoration: BoxDecoration(
-                  border: Border(
-                    top: BorderSide(
-                      color: isDark
-                          ? Colors.white.withOpacity(0.1)
-                          : Colors.black.withOpacity(0.1),
-                    ),
-                  ),
+                suffixIcon: Obx(
+                  () => controller.searchQuery.isNotEmpty
+                      ? IconButton(
+                          onPressed: controller.clearSearch,
+                          icon: const Icon(Icons.close, size: 18),
+                        )
+                      : const SizedBox.shrink(),
                 ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      '${_items.length} items',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: isDark ? Colors.white38 : Colors.black38,
-                      ),
-                    ),
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.keyboard_outlined,
-                          size: 14,
-                          color: isDark ? Colors.white38 : Colors.black38,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          '⌘⇧V to toggle',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: isDark ? Colors.white38 : Colors.black38,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
+              ),
+              style: const TextStyle(fontSize: 14),
+            ),
+          ),
+          const SizedBox(width: 8),
+
+          // Clear history button
+          Obx(
+            () => IconButton(
+              onPressed: controller.items.isEmpty
+                  ? null
+                  : () => _confirmClearHistory(context),
+              icon: const Icon(Icons.delete_sweep_outlined),
+              tooltip: 'Clear history',
+              style: IconButton.styleFrom(
+                foregroundColor: isDark ? Colors.white54 : Colors.black45,
+              ),
+            ),
+          ),
+
+          // Close button
+          IconButton(
+            onPressed: () => windowManager.hide(),
+            icon: const Icon(Icons.close),
+            tooltip: 'Close (Esc)',
+            style: IconButton.styleFrom(
+              foregroundColor: isDark ? Colors.white54 : Colors.black45,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSectionHeader(
+    BuildContext context,
+    String title,
+    IconData? icon, [
+    bool isDark = false,
+  ]) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+      child: Row(
+        children: [
+          if (icon != null) ...[
+            Icon(icon, size: 14, color: Theme.of(context).colorScheme.primary),
+            const SizedBox(width: 6),
+          ],
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: icon != null
+                  ? Theme.of(context).colorScheme.primary
+                  : (isDark ? Colors.white54 : Colors.black45),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildItem(ClipboardItem item) {
+    return ClipboardItemWidget(
+      item: item,
+      onTap: () => controller.copyItem(item),
+      onDelete: () => controller.deleteItem(item),
+      onPin: () => controller.togglePin(item),
+    );
+  }
+
+  Widget _buildFooter(BuildContext context, bool isDark) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        border: Border(
+          top: BorderSide(
+            color: isDark
+                ? Colors.white.withOpacity(0.1)
+                : Colors.black.withOpacity(0.1),
+          ),
+        ),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Obx(
+            () => Text(
+              '${controller.items.length} items',
+              style: TextStyle(
+                fontSize: 11,
+                color: isDark ? Colors.white38 : Colors.black38,
+              ),
+            ),
+          ),
+          Row(
+            children: [
+              Icon(
+                Icons.keyboard_outlined,
+                size: 14,
+                color: isDark ? Colors.white38 : Colors.black38,
+              ),
+              const SizedBox(width: 4),
+              Text(
+                '⌘⇧V to toggle',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: isDark ? Colors.white38 : Colors.black38,
                 ),
               ),
             ],
           ),
-        ),
+        ],
       ),
     );
   }
@@ -441,27 +274,63 @@ class _ClipboardPanelState extends State<ClipboardPanel>
             color: isDark ? Colors.white24 : Colors.black26,
           ),
           const SizedBox(height: 16),
-          Text(
-            _searchQuery.isEmpty
-                ? 'No clipboard history yet'
-                : 'No items match your search',
-            style: TextStyle(
-              fontSize: 14,
-              color: isDark ? Colors.white54 : Colors.black45,
-            ),
-          ),
-          if (_searchQuery.isEmpty) ...[
-            const SizedBox(height: 8),
-            Text(
-              'Copy something to get started',
+          Obx(
+            () => Text(
+              controller.searchQuery.isEmpty
+                  ? 'No clipboard history yet'
+                  : 'No items match your search',
               style: TextStyle(
-                fontSize: 12,
-                color: isDark ? Colors.white38 : Colors.black38,
+                fontSize: 14,
+                color: isDark ? Colors.white54 : Colors.black45,
               ),
             ),
-          ],
+          ),
+          Obx(() {
+            if (controller.searchQuery.isEmpty) {
+              return Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  'Copy something to get started',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: isDark ? Colors.white38 : Colors.black38,
+                  ),
+                ),
+              );
+            }
+            return const SizedBox.shrink();
+          }),
         ],
       ),
     );
+  }
+
+  Future<void> _confirmClearHistory(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Clear History'),
+        content: const Text(
+          'Remove all unpinned items from clipboard history?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(
+              foregroundColor: Theme.of(context).colorScheme.error,
+            ),
+            child: const Text('Clear'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      controller.clearHistory();
+    }
   }
 }
